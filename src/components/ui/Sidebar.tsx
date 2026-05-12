@@ -8,6 +8,8 @@ import {
   Diamond,
   ChevronLeft,
   ChevronRight,
+  Mail,
+  ExternalLink,
 } from 'lucide-react'
 
 interface NavItem {
@@ -113,19 +115,54 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </ul>
       </nav>
 
-      {/* Footer */}
+      {/* Contact Card */}
       <div
-        className="px-4 py-3 border-t border-white/10 shrink-0"
-        style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}
+        style={{
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          padding: collapsed ? '12px 8px' : '14px 16px',
+          flexShrink: 0,
+        }}
       >
         {collapsed ? (
-          <div className="flex justify-center">
-            <span style={{ fontSize: 10 }}>AI</span>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <a
+              href="mailto:manikandankrish12@gmail.com"
+              title="Manikandan Ponperumal"
+              style={{ color: '#C9A84C', display: 'flex' }}
+            >
+              <Mail size={16} />
+            </a>
           </div>
         ) : (
-          <span>Powered by GPT-4o</span>
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 600, color: '#FFFFFF', marginBottom: 2 }}>
+              Manikandan Ponperumal
+            </p>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 10, lineHeight: 1.5 }}>
+              Actively looking for Summer '26 internships
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <a
+                href="mailto:manikandankrish12@gmail.com"
+                style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 11, textDecoration: 'none' }}
+              >
+                <Mail size={13} style={{ flexShrink: 0, color: '#C9A84C' }} />
+                manikandankrish12@gmail.com
+              </a>
+              <a
+                href="https://www.linkedin.com/in/manikandan-p-/"
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 11, textDecoration: 'none' }}
+              >
+                <ExternalLink size={13} style={{ flexShrink: 0, color: '#C9A84C' }} />
+                linkedin.com/in/manikandan-p-
+              </a>
+            </div>
+          </div>
         )}
       </div>
+
     </aside>
   )
 }

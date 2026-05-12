@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import Plot from '../ui/Plot'
 import type { Fund } from '../../types/fund'
-import { calcStrategyScore } from '../../utils/scoreEngine'
+import { calcStrategyScore, calcStrategyDetail } from '../../utils/scoreEngine'
 import { STATUS_COLORS, baseConfig } from '../../utils/plotlyTheme'
 import { STRATEGY_LABELS } from '../../types/fund'
 
@@ -21,27 +21,23 @@ const STRAT_MAP: Record<string, number> = {
 }
 
 export default function StrategyMapModule({ fund, allFunds }: Props) {
-  const { score, inQuadrant } = useMemo(() => {
-    const committed = allFunds.filter((f) => f.status === 'committed' && f.id !== fund.id)
-    const fundStage = STAGE_MAP[fund.stageF] ?? 3
-    const fundStrat = STRAT_MAP[fund.strategy] ?? 3
-    const inQ = committed.filter((f) => {
-      const fs = STAGE_MAP[f.stageF] ?? 3
-      const ss = STRAT_MAP[f.strategy] ?? 3
-      return Math.abs(fs - fundStage) <= 1 && Math.abs(ss - fundStrat) <= 1
-    })
-    return {
-      score: calcStrategyScore(fund, allFunds),
-      inQuadrant: inQ,
-    }
-  }, [fund, allFunds])
+  const { score, detail } = useMemo(() => ({
+    score: calcStrategyScore(fund, allFunds),
+    detail: calcStrategyDetail(fund, allFunds),
+  }), [fund, allFunds])
 
   const scoreColor = score >= 7 ? '#059669' : score >= 5 ? '#D97706' : '#DC2626'
 
   const otherFunds = allFunds.filter((f) => f.id !== fund.id)
-
   const committed = otherFunds.filter((f) => f.status === 'committed')
   const others = otherFunds.filter((f) => f.status !== 'committed')
+
+  const overlapLabel =
+    detail.exactMatch === 0 && detail.vintageCorrelated === 0
+      ? 'No exact overlap — unique positioning'
+      : detail.exactMatch === 0
+      ? `${detail.vintageCorrelated} strategy+vintage overlap${detail.vintageCorrelated > 1 ? 's' : ''}`
+      : `${detail.exactMatch} exact match${detail.exactMatch > 1 ? 'es' : ''} (same strategy & stage)`
 
   return (
     <div>
@@ -49,7 +45,6 @@ export default function StrategyMapModule({ fund, allFunds }: Props) {
         <div style={{ flex: 1 }}>
           <Plot
             data={[
-              // Other (non-committed) funds
               ...(others.length > 0
                 ? [
                     {
@@ -64,7 +59,6 @@ export default function StrategyMapModule({ fund, allFunds }: Props) {
                     },
                   ]
                 : []),
-              // Committed funds
               {
                 type: 'scatter' as const,
                 mode: 'markers' as const,
@@ -80,7 +74,6 @@ export default function StrategyMapModule({ fund, allFunds }: Props) {
                 hovertemplate: '%{text}<extra></extra>',
                 name: 'Committed',
               },
-              // This fund
               {
                 type: 'scatter' as const,
                 mode: 'text+markers' as const,
@@ -128,37 +121,55 @@ export default function StrategyMapModule({ fund, allFunds }: Props) {
           />
         </div>
 
-        <div style={{ width: 140, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 24 }}>
-          <div style={{ fontSize: 42, fontWeight: 700, color: scoreColor, lineHeight: 1 }}>
-            {score.toFixed(1)}
+        <div style={{ width: 160, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 16, gap: 12 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 42, fontWeight: 700, color: scoreColor, lineHeight: 1 }}>
+              {score.toFixed(1)}
+            </div>
+            <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>/ 10</div>
           </div>
-          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>/ 10</div>
-          <div
-            style={{
-              marginTop: 16,
-              padding: '8px 12px',
-              backgroundColor: '#F3F4F6',
-              borderRadius: 6,
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ fontSize: 22, fontWeight: 700, color: '#111827' }}>
-              {inQuadrant.length}
+
+          <div style={{ width: '100%', fontSize: 12, color: '#374151', lineHeight: 1.7 }}>
+            <div style={{ marginBottom: 6 }}>
+              <span style={{ color: '#6B7280' }}>Exact overlaps: </span>
+              <strong style={{ color: detail.exactMatch > 0 ? '#DC2626' : '#059669' }}>
+                {detail.exactMatch}
+              </strong>
             </div>
-            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-              committed funds in same space
+            <div style={{ marginBottom: 6 }}>
+              <span style={{ color: '#6B7280' }}>Strategy AUM: </span>
+              <strong style={{ color: detail.stratConcentration > 0.30 ? '#D97706' : '#374151' }}>
+                {(detail.stratConcentration * 100).toFixed(0)}%
+              </strong>
             </div>
+            <div style={{ marginBottom: 6 }}>
+              <span style={{ color: '#6B7280' }}>Vintage corr.: </span>
+              <strong style={{ color: detail.vintageCorrelated >= 2 ? '#D97706' : '#374151' }}>
+                {detail.vintageCorrelated}
+              </strong>
+            </div>
+            {detail.warmReferralRate != null && (
+              <div>
+                <span style={{ color: '#6B7280' }}>Warm referral: </span>
+                <strong style={{
+                  color: detail.warmReferralRate >= 0.35 ? '#059669'
+                    : detail.warmReferralRate >= 0.20 ? '#374151'
+                    : '#D97706'
+                }}>
+                  {(detail.warmReferralRate * 100).toFixed(0)}%
+                </strong>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       <p style={{ fontSize: 12, color: '#6B7280', marginTop: 8, lineHeight: 1.6 }}>
-        {inQuadrant.length === 0
-          ? `This fund has a unique strategy position — no committed portfolio funds operate in the same ${STRATEGY_LABELS[fund.strategy]} / ${fund.stageF} space.`
-          : `${inQuadrant.length} of your committed fund${inQuadrant.length > 1 ? 's' : ''} operate in a similar strategy space: ${inQuadrant
-              .slice(0, 2)
-              .map((f) => f.fundName)
-              .join(', ')}${inQuadrant.length > 2 ? ', and others' : ''}.`}
+        {overlapLabel}. {STRATEGY_LABELS[fund.strategy]} funds represent{' '}
+        {(detail.stratConcentration * 100).toFixed(0)}% of committed AUM after adding this fund
+        {detail.vintageCorrelated > 0
+          ? ` — ${detail.vintageCorrelated} committed fund${detail.vintageCorrelated > 1 ? 's' : ''} share a similar strategy and vintage (return correlation risk).`
+          : '.'}
       </p>
     </div>
   )

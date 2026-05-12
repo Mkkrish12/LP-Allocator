@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import { useFundStore } from '../store/fundStore'
-import type { Fund } from '../types/fund'
+import type { Fund, FundVintage } from '../types/fund'
 import { extractTextFromPDF, extractFundData } from '../utils/claudeClient'
 import Header from '../components/ui/Header'
 import Card from '../components/ui/Card'
@@ -86,15 +86,64 @@ function StepIndicator({ step }: { step: number }) {
   )
 }
 
-function deepMerge(base: Partial<Fund>, overlay: Partial<Fund>): Partial<Fund> {
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v)
+}
+
+function mergeObjects(
+  base: Record<string, unknown>,
+  overlay: Record<string, unknown>,
+): Record<string, unknown> {
   const result = { ...base }
-  for (const key of Object.keys(overlay) as (keyof Fund)[]) {
+  for (const key of Object.keys(overlay)) {
     const val = overlay[key]
-    if (val !== null && val !== undefined) {
-      (result as Record<string, unknown>)[key] = val
+    if (val !== null && val !== undefined) result[key] = val
+  }
+  return result
+}
+
+function mergePriorFunds(base: FundVintage[], overlay: FundVintage[]): FundVintage[] {
+  const result = [...base]
+  for (const ovFund of overlay) {
+    const idx = result.findIndex(
+      (f) =>
+        (f.fundName && ovFund.fundName && f.fundName === ovFund.fundName) ||
+        (f.vintageYear && ovFund.vintageYear && f.vintageYear === ovFund.vintageYear),
+    )
+    if (idx >= 0) {
+      // Merge matched fund — overlay wins for primitives, deep-merge portfolioQuality
+      const merged = { ...result[idx], ...ovFund }
+      if (result[idx].portfolioQuality && ovFund.portfolioQuality) {
+        merged.portfolioQuality = { ...result[idx].portfolioQuality, ...ovFund.portfolioQuality }
+      } else if (!ovFund.portfolioQuality) {
+        merged.portfolioQuality = result[idx].portfolioQuality
+      }
+      result[idx] = merged
+    } else {
+      result.push(ovFund)
     }
   }
   return result
+}
+
+function deepMerge(base: Partial<Fund>, overlay: Partial<Fund>): Partial<Fund> {
+  const result = { ...base } as Record<string, unknown>
+  for (const key of Object.keys(overlay) as (keyof Fund)[]) {
+    const val = overlay[key]
+    if (val === null || val === undefined) continue
+    const existing = result[key]
+    if (key === 'priorFunds' && Array.isArray(val) && Array.isArray(existing)) {
+      result[key] = mergePriorFunds(existing as FundVintage[], val as FundVintage[])
+    } else if (isPlainObject(val) && isPlainObject(existing)) {
+      result[key] = mergeObjects(existing, val)
+    } else if (Array.isArray(val)) {
+      // For other arrays (team, sourceDocuments): prefer the longer / non-empty one
+      result[key] = (val as unknown[]).length > 0 ? val : (existing ?? val)
+    } else {
+      result[key] = val
+    }
+  }
+  return result as Partial<Fund>
 }
 
 export default function AnalyzeNewFund() {
@@ -105,9 +154,11 @@ export default function AnalyzeNewFund() {
   const [extracting, setExtracting] = useState(false)
   const [mergedData, setMergedData] = useState<Partial<Fund>>({})
   const [_createdFundId, setCreatedFundId] = useState<string | null>(null)
+  const [dropError, setDropError] = useState<string | null>(null)
 
   const onDrop = useCallback(
     (accepted: File[]) => {
+      setDropError(null)
       const newEntries: FileEntry[] = accepted.map((file) => ({
         file,
         docType: 'Fund Deck',
@@ -118,8 +169,13 @@ export default function AnalyzeNewFund() {
     []
   )
 
+  const onDropRejected = useCallback(() => {
+    setDropError('Only PDF files are accepted. Please upload .pdf documents.')
+  }, [])
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: { 'application/pdf': ['.pdf'] },
     multiple: true,
   })
@@ -136,6 +192,11 @@ export default function AnalyzeNewFund() {
     const updated = [...files]
 
     for (let i = 0; i < updated.length; i++) {
+      if (updated[i].status === 'done') {
+        // Already extracted — include in merge but skip re-extraction
+        if (updated[i].extracted) merged = deepMerge(merged, updated[i].extracted!)
+        continue
+      }
       updated[i] = { ...updated[i], status: 'extracting' }
       setFiles([...updated])
 
@@ -158,6 +219,12 @@ export default function AnalyzeNewFund() {
     setMergedData(merged)
     setExtracting(false)
     if (updated.some((f) => f.status === 'done')) setStep(1)
+  }
+
+  const handleRetry = (idx: number) => {
+    setFiles((prev) =>
+      prev.map((f, i) => (i === idx ? { ...f, status: 'queued', error: undefined } : f))
+    )
   }
 
   const handleSaveAndAnalyze = () => {
@@ -286,6 +353,31 @@ export default function AnalyzeNewFund() {
               <p style={{ fontSize: 13, color: '#9CA3AF' }}>PDF files only · Fund decks, DDQs, quarterly reports, LPAs</p>
             </div>
 
+            {/* Drop rejection error */}
+            {dropError && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  marginBottom: 16,
+                }}
+              >
+                <XCircle size={14} color="#DC2626" />
+                <p style={{ fontSize: 13, color: '#DC2626' }}>{dropError}</p>
+                <button
+                  onClick={() => setDropError(null)}
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', display: 'flex' }}
+                >
+                  <XCircle size={14} />
+                </button>
+              </div>
+            )}
+
             {/* File List */}
             {files.length > 0 && (
               <Card style={{ marginBottom: 24 }}>
@@ -348,11 +440,31 @@ export default function AnalyzeNewFund() {
                             borderRadius: '0 0 6px 6px',
                             border: '1px solid #FECACA',
                             borderTop: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
                           }}
                         >
                           <p style={{ fontSize: 11, color: '#DC2626', lineHeight: 1.5 }}>
                             ⚠ {entry.error}
                           </p>
+                          <button
+                            onClick={() => handleRetry(i)}
+                            style={{
+                              fontSize: 11,
+                              color: '#2563EB',
+                              background: 'none',
+                              border: '1px solid #2563EB',
+                              borderRadius: 4,
+                              padding: '2px 8px',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              fontFamily: 'Inter, sans-serif',
+                            }}
+                          >
+                            Retry
+                          </button>
                         </div>
                       )}
                     </div>

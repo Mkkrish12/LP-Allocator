@@ -6,7 +6,7 @@ import Header from '../components/ui/Header'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
-import { COLORWAY, baseConfig, mergeLayout } from '../utils/plotlyTheme'
+import { COLORWAY, compareConfig, mergeLayout } from '../utils/plotlyTheme'
 import { X, GitCompare } from 'lucide-react'
 
 const STAGE_MAP: Record<string, number> = {
@@ -224,7 +224,7 @@ export default function CompareFunds() {
               yaxis: { ...mergeLayout({}).yaxis, title: { text: 'Value', font: { size: 12 } } },
               legend: { x: 1, y: 1, xanchor: 'right', font: { size: 10 } },
             })}
-            config={baseConfig}
+            config={compareConfig}
             style={{ width: '100%' }}
           />
         </Card>
@@ -267,7 +267,7 @@ export default function CompareFunds() {
               legend: { x: 1, y: 1, xanchor: 'right', font: { size: 10 } },
               font: { family: 'Inter, sans-serif', size: 11, color: '#374151' },
             }}
-            config={baseConfig}
+            config={compareConfig}
             style={{ width: '100%' }}
           />
         </Card>
@@ -361,7 +361,7 @@ export default function CompareFunds() {
               },
               legend: { x: 1, y: 1, xanchor: 'right', font: { size: 10 } },
             })}
-            config={baseConfig}
+            config={compareConfig}
             style={{ width: '100%' }}
           />
         </Card>

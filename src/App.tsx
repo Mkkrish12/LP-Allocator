@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar from './components/ui/Sidebar'
 import Dashboard from './pages/Dashboard'
 import FundLibrary from './pages/FundLibrary'
@@ -33,6 +33,7 @@ export default function App() {
             <Route path="/fund/:id" element={<FundAnalysis />} />
             <Route path="/compare" element={<CompareFunds />} />
             <Route path="/portfolio" element={<PortfolioView />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
       </div>

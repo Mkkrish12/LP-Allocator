@@ -10,7 +10,7 @@ interface ScoreGaugeProps {
 
 const MODULE_LABELS: Record<keyof typeof WEIGHTS, string> = {
   fundMath: 'Fund Math',
-  teamPedigree: 'Team Pedigree',
+  teamPedigree: 'Track Record',
   strategyDifferentiation: 'Strategy Fit',
   termsFairness: 'Terms',
   portfolioFit: 'Portfolio Fit',

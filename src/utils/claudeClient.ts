@@ -1,39 +1,44 @@
+import OpenAI from 'openai'
 import type { Fund, ModuleScores, BenchmarkAverages } from '../types/fund'
 import { EXTRACTION_SYSTEM_PROMPT, IC_MEMO_SYSTEM_PROMPT } from './prompts'
+import {
+  calcFundMathDetail,
+  calcTeamPedigreeDetail,
+  calcStrategyDetail,
+  calcTermsDetail,
+  calcPortfolioFitDetail,
+  calcVintageDetail,
+  getRecommendation,
+} from './scoreEngine'
 
 const API_KEY = import.meta.env.VITE_OPENAI_API_KEY as string
 const MODEL = (import.meta.env.VITE_OPENAI_MODEL as string) || 'gpt-4o'
-const API_URL = 'https://api.openai.com/v1/chat/completions'
 
-async function callOpenAI(systemPrompt: string, userContent: string): Promise<string> {
+function getClient(): OpenAI {
   if (!API_KEY) {
-    throw new Error('VITE_OPENAI_API_KEY is not set. Add your OpenAI key to .env.local and restart the dev server.')
+    throw new Error(
+      'VITE_OPENAI_API_KEY is not set. Add your OpenAI key to .env.local and restart the dev server.',
+    )
   }
+  return new OpenAI({
+    apiKey: API_KEY,
+    dangerouslyAllowBrowser: true,
+  })
+}
 
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 4096,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
-    }),
+async function callOpenAI(systemPrompt: string, userContent: string, maxTokens = 4096): Promise<string> {
+  const client = getClient()
+
+  const response = await client.chat.completions.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userContent },
+    ],
   })
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: response.statusText } }))
-    const msg = error?.error?.message ?? response.statusText
-    throw new Error(`OpenAI API error ${response.status}: ${msg}`)
-  }
-
-  const data = await response.json()
-  const text: string = data.choices?.[0]?.message?.content ?? ''
+  const text = response.choices?.[0]?.message?.content ?? ''
   if (!text) throw new Error('Empty response from OpenAI API')
   return text
 }
@@ -45,7 +50,7 @@ export async function extractFundData(
   const systemPrompt = EXTRACTION_SYSTEM_PROMPT.replace('{documentType}', documentType)
   const userContent = `Extract fund data from the following document:\n\n${pdfText}`
 
-  const raw = await callOpenAI(systemPrompt, userContent)
+  const raw = await callOpenAI(systemPrompt, userContent, 4096)
 
   // Strip markdown code fences if the model wraps its output
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
@@ -61,13 +66,26 @@ export async function generateICMemo(
   fund: Fund,
   scores: ModuleScores,
   benchmarks: BenchmarkAverages,
+  allFunds: Fund[] = [],
 ): Promise<string> {
+  const computedSignals = {
+    powerLaw:       calcFundMathDetail(fund, allFunds),
+    team:           calcTeamPedigreeDetail(fund),
+    strategy:       calcStrategyDetail(fund, allFunds),
+    terms:          calcTermsDetail(fund),
+    portfolioFit:   calcPortfolioFitDetail(fund, allFunds),
+    vintage:        calcVintageDetail(fund, allFunds),
+    recommendation: getRecommendation(scores.overall),
+    scores,
+    benchmarks,
+  }
+  const memoDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   const systemPrompt = IC_MEMO_SYSTEM_PROMPT
     .replace('{fundJSON}', JSON.stringify(fund, null, 2))
-    .replace('{scoresJSON}', JSON.stringify(scores, null, 2))
-    .replace('{benchmarkJSON}', JSON.stringify(benchmarks, null, 2))
+    .replace('{computedSignalsJSON}', JSON.stringify(computedSignals, null, 2))
+    .replace('{memoDate}', memoDate)
 
-  return callOpenAI(systemPrompt, 'Generate the IC memo now.')
+  return callOpenAI(systemPrompt, 'Generate the IC memo now.', 4000)
 }
 
 // PDF text extraction via PDF.js (pdfjs-dist v5)

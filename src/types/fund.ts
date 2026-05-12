@@ -1,3 +1,22 @@
+export interface FundVintagePortfolioQuality {
+  hasTopDecileOutlier: boolean        // ≥1 company at ≥3× current MOIC
+  topHoldingMOIC: number              // best performing company MOIC
+  topHoldingPctNAV: number            // top holding as % of total NAV (decimal)
+  coInvestorTier: 'tier1' | 'tier2' | 'none'  // who led follow-on rounds
+  proactiveWriteDowns: boolean        // GP wrote down proactively (not forced)
+  dpiVsBenchmark: 'above' | 'on_track' | 'lagging'  // vs CA age-appropriate curve
+}
+
+export interface OperationalSignals {
+  warmReferralRate?: number           // decimal e.g. 0.42 = 42% portfolio-founder-referred
+  dealFlowPerYear?: number            // companies reviewed per year
+  teamDepartureCount?: number         // investing professionals who left since inception
+  icGovernanceRigorous?: boolean      // unanimous/majority vote + documented IC memo required
+  auditorTier?: 'big4' | 'regional' | 'none'
+  counselTier?: 'top_tier' | 'mid_tier' | 'none'
+  gpPersonalCommitAboveMin?: boolean  // GPs framed personal commit as above the required min
+}
+
 export interface PortfolioCompany {
   name: string
   sector: string
@@ -26,6 +45,7 @@ export interface FundVintage {
   lossRatio: number
   topCompanyConcentration: number
   portfolioCompanies: PortfolioCompany[]
+  portfolioQuality?: FundVintagePortfolioQuality
 }
 
 export interface TeamMember {
@@ -153,6 +173,9 @@ export interface Fund {
   // Source documents
   sourceDocuments: string[]
   extractionConfidence: number
+
+  // Operational signals (from DDQ)
+  operationalSignals?: OperationalSignals
 
   // Generated memo
   icMemo?: string
